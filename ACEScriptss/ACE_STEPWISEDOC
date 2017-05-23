@@ -1,0 +1,155 @@
+ACE data analysis : 
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Step 1 : 
+
+i) Run the nfdump queries on the ACE data
+
+
+ii) ACE data can be found at /media/netflow/profiles-data/netsage/sw_wash_ace_iu_edu/2016 under flowproc server. 
+server details : flow-proc.bldc.grnoc.iu.edu (140.182.45.98)
+
+iii ) Use the nfdump query to get prefixes and total bytes for every prefix on the quarterly data.
+
+General Query : d
+
+nfdump -M 0X:0Y:0Z  -R . -o csv -A (dstip/srcip)(4/24)(6/64) interface condition | cut -s -d , -f (5,13/4,13) >> location of the result file 
+
+
+Examples for Y7Q1 : 
+
+nfdump -M 03:04:05  -R . -o csv -A dstip4/24 "in if 2 or in if 66 or in if 130" | cut -s -d , -f 5,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-us-dstip4-24-ipAndBytes
+nfdump -M 03:04:05  -R . -o csv -A dstip4/24 "in if 1 or in if 65 or in if 129" | cut -s -d , -f 5,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-eu-dstip4-24-ipAndBytes
+
+nfdump -M 03:04:05  -R . -o csv -A srcip4/24   "in if 1 or in if 65 or in if 129" | cut -s -d , -f 4,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-us-srcip4-24-ipAndBytes
+nfdump -M 03:04:05  -R . -o csv -A srcip4/24   "in if 2 or in if 66 or in if 130" | cut -s -d , -f 4,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-eu-srcip4-24-ipAndBytes
+
+nfdump -M 03:04:05  -R . -o csv -A dstip6/64 "in if 2 or in if 66 or in if 130" | cut -s -d , -f 5,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-us-dstip6-64-ipAndBytes
+nfdump -M 03:04:05  -R . -o csv -A dstip6/64 "in if 1 or in if 65 or in if 129" | cut -s -d , -f 5,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-eu-dstip6-64-ipAndBytes
+
+nfdump -M 03:04:05  -R . -o csv -A srcip6/64   "in if 1 or in if 65 or in if 129" | cut -s -d , -f 4,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-us-srcip6-64-ipAndBytes
+nfdump -M 03:04:05  -R . -o csv -A srcip6/64   "in if 2 or in if 66 or in if 130" | cut -s -d , -f 4,13 >> /home/asampath/ACE/03_04_05/ace-y2q2-top-eu-srcip6-64-ipAndBytes
+
+I have generated a public key of dev server(156.56.6.121) and placed it in flow-proc. Scp and ssh are easier now.  
+
+
+Update : We have parallel threads performing much better and all of the nfdump queries can be performed at once! 
+Can find the python script for parallel running of the nfdump scripts in "/home/asampath/ACE". We will need to change the input folder
+in the script. Which will be changed to input argument. 
+
+Update 2 : We have two scripts - One for monthly and quartery analysis and the other one for yearly analysis of ACE data. 
+
+1. ThreadTestMonth.py - is the script which runs all 8 threads for nfdump in parallel. It takes in 4 input arguments; month/months, year, path of the result file and quarter for which we are running the data(this is also be on the result file name)
+
+Example for Running for a month : 
+python ThreadTestMonth.py 06 2016 /home/predrag/result month06
+
+Example for multiple months
+python ThreadTestMonth.py 06:07:08:09:10 2016 /home/predrag/result month06
+
+Example for a quarter 
+python ThreadTestMonth.py 06:07:08 2016 /home/predrag/result Y7Q2
+
+In all the above examples, the year we are looking at is 2016, months vary, result path is /home/predrag/result and the quarter name changes accordingly. 
+
+
+// tODO: Months across two years, make changes in the ThreadTestYear.py. Take all months and all years as input args. //
+
+2. ThreadTestYear.py 
+
+This script is similar to the previous one but the input parameters change a little. 
+
+Example for a quarter 
+python ThreadTestMonth.py 2016 2017 /home/predrag/result Y7
+
+The first two parameters include the years involved for the quarterly analysis. The months for those years are set in the script(needs to be changed for others) 
+
+// Todo : Its better to take the range of months as input arguments, as march-feb is only for ACE // 
+
+We can find this scripts in elkrprod in the path : "/home/asampath/flowprocScripts"
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Step 2: 
+
+
+
+i)Once we have Prefixes and Total Bytes for all 8 expected files. Move them to elk prod server (156.56.6.121) to the path /home/asampath/IPDomainMap/src
+
+You can directly skip to step vi) in case you are not re-running on individual files. Only thing to be done before step vi) is run the 
+cropFiles.sh(explained in step (iv))
+
+ii) Make sure the class path is set. If not set it to 
+
+export CLASSPATH="/home/asampath/IPDomainMap/Lib/httpclient-4.0.3.jar:/home/asampath/IPDomainMap/Lib/apache-httpcomponents-httpcore.jar:/home/asampath/IPDomainMap/src/:/home/asampath/IPDomainMap/Lib/commons-logging-1.2/commons-logging-1.2.jar:/home/asampath/IPDomainMap/Lib/sqlserverjdbc.jar:/home/asampath/IPDomainMap/Lib/mysql-connector-java-5.1.41-bin.jar"
+
+Note : Login as root if you want to make changes to the java Files. 
+
+iii) Compile all java Files ('javac *.java' should do this. If in future any libraries are added to the java code, make sure you add it to the classPath)
+
+Steps 2 and 3 are necessary if there is any change in code to any of the java Files
+
+iv) Cut first line and last two lines of all IPtoBytes files. They have header and summary, which is not required by us. 
+
+There is a script which does this now. Its named cropFiles.sh, and it can be found at /home/asampath/IPDomainMap/src. This script cuts data as we require from all the files in the folder. So when we run this make sure all the files that we want to crop the lines are also placed in the directory /home/asampath/IPDomainMap/src/CropFiles. Once we run this move the processed files back to /home/asampath/IPDomainMap/src for later processing by java code. 
+
+v) Run IpDomainDBargs with filenames as arguments. These programs will create result files with names filenames-withallDetails.csv
+
+Command : java IpDomainDBargs ace-y2q3-top-eu-srcip6-24-ipAndBytes 
+File creation example : ace-y2q3-top-eu-srcip6-24-ipAndBytes ----> ace-y2q3-top-eu-srcip6-24-ipAndBytes-withASandDetails.csv
+
+The above has to be done only if we are running for individual files. Ignore this step, we are not running for one file. 
+
+vi) This is probably the most important script, which extracts details of all prefixes from mysql database and ip-api.com. 
+
+javaThreadDB.py starts 8 parallel threads for each of the (prefix,bytes) 8 files. These 8 threads call the IpDomainDBargs and they simultaneously start processing for all files. Each of the java program starts a connection to the database and gets results from mysql database and if the ip is not found we contact "ip-api.com" for details. All the results are proccesed to a result file. We also ahve 8 text files generated while this script is running to track on errors and check on output of each of the 8 thread.
+ 
+Command : python javaThreadDB.py Y7Q3(changes accordingly)
+
+vii) If we are running yearly analysis, we have to use the IpDomainDBargsYear.java. So we have to change the script "javaThreadDB.py" slighltly. // This is as T0-DO //  
+
+todo - write nohup commands and output logger!  
+
+ -------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step 3: Seperating Ipv6 records from IPv4.  
+
+i) The ips.py script can be found at /home/aasingh/environments/ips/ips.py 
+
+ii) The python script takes the file with ipv4 and ipv6 addresses and seperates them into 2 individual files
+
+iii) Do this for all four ipv4 files with AS and other details. All four ipv4 files which was produced in the previous step will be the input for the ips.py file and that script(ips.py) will produce two seperate output files one with all ipv4 records and the other output files with all ipv6 records for each input file which contains both ipv4 and ipv6 records. 
+
+Example -->
+
+input file   : ace-y7q4-top-us-dstip4-24-ipAndByteswithASandDetails.csv  
+output files :  i)ace-y7q4-top-us-dstip4-24-ipAndByteswithASandDetails.csvv4s.csv
+				ii)ace-y7q4-top-us-dstip4-24-ipAndByteswithASandDetails.csvv6.csv
+
+Command example : python ips.py ace-y7q4-top-us-dstip4-24-ipAndByteswithASandDetails.csv
+
+iv) Move the new files to /home/asampath/IPDomainMap/src/v4v6Processing and also the actual v6 files and run the v6concat.py script in that folder. This script is to concatenate the actual ipv6 address with details file with newly seperated ipv6 addresses.    
+ 
+v) After this step,move the final 8 files for processing to /home/asampath/dataForProcessing/quarterly folders. 
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step 4 : Analysis
+
+i) Use the python scripts on each files of the quarter, this srcipt reads the data, does the pivot analysis and generates a pie chart and result file.
+
+ii) Place the quarterly files in the quarterly folder and run the ParseCsvAS_server.py in the /home/asampath/dataForProcessing/pythonScripts. Change the quarter title and the path of the folder you are files are placed in. 
+
+Todo : Take these two paramters (path and quarter title) from command line. Since directory strutucture was not final, could not do this.
+
+iii) Repeat to do analysis based on Org. The chart and result sheet will be found in the same folder as the source files. 
+
+iv) Move them to the desired folder. 
+
+Update : We have two scripts to analyse by AS and by Org,which also plots the graphs. The Org analysis python code also generates the ipv4-ipv6 pie chart. The process by AS code has detailed comments about the functioning of the code. This runs in few seconds and generates graphs in the same folder where we find our input data. 
+
+Following is the directory structure. 
+
+/home/asampath/dataForProcessing - is the root dir for quarterly analysis
+This has folders named Y7Q1,Y7Q2 and so on which contain the input files for analysis. 
+
+The folder pythonScripts has two scripts to anaylse based on AS and Org. Running these two will produce result files and graphs. 
+The graphs and result files can be found at the quarterly directories Y7Q1,Y7Q2.....

@@ -1,0 +1,119 @@
+Database basics : 
+
+The files with all ip and details must be placed in /var/lib/mysql-files/
+
+-----------------------------------------------------------------------------
+
+For ipv4 table : 
+
+Sample create query : 
+
+create table IPV4PREFIXTOASNUM(Ip varchar(64),Total_Bytes varchar(64),Country varchar(32),Region_Name varchar(32),City varchar(32),Zip varchar(8),Latitude varchar(16),Longitude varchar(16),ISP varchar(64),Org varchar(64),ASNUM varchar(16));
+
+Import Query for ipv4 files : 
+
+for f in v4*.csv
+do
+    mysql -e "load data local infile '"$f"' into table IPV4PREFIXTOASNUM fields terminated by ',' "  -u root -p PrefixToAsNumDB
+done
+
+
+-----------------------------------------------------------------------------
+
+For ipv6 table : 
+
+create table IPV6PREFIXTOASNUM(Ip varchar(64),Total_Bytes varchar(64),Country varchar(32),Region_Name varchar(32),City varchar(32),Zip varchar(8),Latitude varchar(16),Longitude varchar(16),ISP varchar(64),Org varchar(64),ASNUM varchar(16));
+
+
+for f in v6*.csv
+do
+    mysql -e "load data local infile '"$f"' into table IPV6PREFIXTOASNUM fields terminated by ',' "  -u root -p PrefixToAsNumDB
+done
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+To check datapath : 
+mysql -u root -p -e 'SHOW VARIABLES WHERE Variable_Name LIKE "%dir"'
+
+
+Tunneling : 
+
+Since we cannot connect to our production machine from outside IU network we cannot directly connect to mysql server on elk production server from client on desktop/mac. We use ssh tunneling for this purpose. 
+
+Run the below command on your local machine
+ssh -L 10001:156.56.6.121:3306 asampath@silo.soic.indiana.edu
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+While connecting to mysql from workbench on your machine, use the following credentials :
+
+Hostname : 127.0.0.1
+Port : 10001
+Username : remoteroot
+Password : Sent in email
+
+ 
+
+This is an example to Grant permissions for more users : 
+
+mysql> CREATE USER 'monty'@'%' IDENTIFIED BY 'some_pass';
+mysql> GRANT ALL PRIVILEGES ON *.* TO 'monty'@'%'
+    ->     WITH GRANT OPTION;
+
+
+Query for duplicates : 
+select AS_NUM from AStoOrgv4 GROUP BY AS_NUM Having count(*) >1 ;
+
+-------------------------------------------------------------------------------------------------------------------------------------
+Insert query for the the database AStoOrgv4 and AStoOrgv6 which are created using existing tables IPV4PREFIXTOASNUM and IPV6PREFIXTOASNUM : 
+
+1) insert into AStoOrgv4(AS_NUM,OrgName) 
+select distinct t1.ASNUM,t1.Org from IPV4PREFIXTOASNUM t1 where NOT EXISTS(select AS_NUM from AStoOrgv4 t2 where t1.ASNUM=t2.AS_NUM);
+
+2) insert into AStoOrgv6(AS_NUM,OrgName) 
+select distinct t1.ASNUM,t1.Org from IPV6PREFIXTOASNUM t1 where NOT EXISTS(select AS_NUM from AStoOrgv6 t2 where t1.ASNUM=t2.AS_NUM);
+
+Select query for the database instead of "where ="  
+
+select * from AStoOrgv4 where AS_NUM LIKE "%AS10013%"; 
+
+Query to Add column and the set the value to the new column*  
+
+ALTER TABLE AStoOrgv4 ADD OrgForGraph VARCHAR(64);
+UPDATE AStoOrgv4 SET OrgForGraph = OrgName
+
+Query for Dupliactes with counts 
+select AS_NUM,count(*) from AStoOrgv4 GROUP BY AS_NUM Having count(*) >1 ;
+
+Query For empty AS numbers
+SELECT AS_NUM,OrgName FROM AStoOrgv4 WHERE AS_NUM < '';
+-------------------------------------------------------------------------------------------------------------------------------------
+
+Queries to add unique index and make it as primary key : 
+
+Add unique index Example:
+
+ALTER TABLE AStoOrgv4 ADD ID varchar(36);
+UPDATE AStoOrgv4 SET ID=(SELECT md5(UUID()));
+ALTER TABLE AStoOrgv4 ADD UNIQUE INDEX u_ip(as_num,ID);
+ALTER TABLE AStoOrgv4 ADD PRIMARY KEY (ID)
+
+
+------------------------------------------------------------------------------------------------------------------------------------
+Tables that we use in PrefixToAsNumDB database : 
+
+IPV6PREFIXTOASNUM
+IPV6PREFIXTOASNUM
+
+Tables to be used : 
+
+AStoOrgv4
+AStoOrgv6
+
+Todo : 
+
+1. We have AStoOrgv4 and AStoOrgv6 databases where the OrgName and OrgForGraph have same values. These have to changed.OrgForGraph needs to a shorter names which fit well in the graph(we also dicussed about changing the font size in the graph, which is another option. Look at plot method in ParseCsvAs_server.py and ParseCsvOrg.py to change it) 
+Each value can be edited from the MysqlWorkbench client by connecting to the database. Just run a select query and u can start changing the values in the result grid. 
+
+2. We need to import all data from all quarters. We have so far imported by combining files of quarters and have not done this for fourth quarter. There are also some duplicate prefixes because of this. 
+
